@@ -18,8 +18,8 @@ class AnymalEnv:
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         
         # Load the environment components
-        self.plane_id = p.loadURDF("plane.urdf")
-        self.robot_id = p.loadURDF("anymal.urdf", [0, 0, 0.5], useFixedBase=False)
+        self.plane_id = p.loadURDF("urdf/plane.urdf")
+        self.robot_id = p.loadURDF("urdf/anymal.urdf", [0, 0, 0.5], useFixedBase=False)
         
         # Set gravity and time step
         p.setGravity(0, 0, -9.8)
@@ -34,8 +34,8 @@ class AnymalEnv:
         """ Reset the simulation environment """
         p.resetSimulation(self.client)
         p.setGravity(0, 0, -9.8)
-        self.plane_id = p.loadURDF("plane.urdf")
-        self.robot_id = p.loadURDF("anymal.urdf", [0, 0, 0.5], useFixedBase=False)
+        self.plane_id = p.loadURDF("urdf/plane.urdf")
+        self.robot_id = p.loadURDF("urdf/anymal.urdf", [0, 0, 0.5], useFixedBase=False)
         
         self.done = False
         return self.get_observation()
