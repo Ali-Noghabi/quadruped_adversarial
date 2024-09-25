@@ -3,6 +3,7 @@ import pybullet_data
 import time
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 class AnymalEnv:
     def __init__(self, gui=True, time_step=1./240):
