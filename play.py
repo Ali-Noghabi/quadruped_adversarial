@@ -1,5 +1,5 @@
 import torch
-from adversarial_agent import AdversarialAgent
+from adversarial_agent2 import AdversarialAgent
 from dummy_legged_environment import DummyLeggedRobotEnv
 # Initialize the environment with a control mode ('P' for position control, 'V' for velocity, 'T' for torque)
 env = DummyLeggedRobotEnv(control_mode='T')  # Change 'T' to 'P' or 'V' for different modes

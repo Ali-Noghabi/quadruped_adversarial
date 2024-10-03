@@ -1,14 +1,13 @@
 import pybullet as p
 import pybullet_data
 import time
-import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
 class AnymalEnv:
-    def __init__(self, gui=True, time_step=1./240):
+    def __init__(self, gui=True, time_step=1./240, device='cpu'):
         """ Initialize the simulation environment """
         # Connect to the PyBullet server
+        self.device = device  # Allows for potential future GPU support
         if gui:
             self.client = p.connect(p.GUI)
         else:
@@ -26,7 +25,6 @@ class AnymalEnv:
         p.setTimeStep(time_step)
         
         self.n_joints = p.getNumJoints(self.robot_id)
-        
         self.time_step = time_step
         self.done = False
 
@@ -41,10 +39,10 @@ class AnymalEnv:
         return self.get_observation()
 
     def get_observation(self):
-        """ Collect observations from the robot """
+        """ Collect observations from the robot and return them as PyTorch tensors """
         # Joint positions and velocities
-        joint_positions = torch.zeros(self.n_joints)
-        joint_velocities = torch.zeros(self.n_joints)
+        joint_positions = torch.zeros(self.n_joints, device=self.device)
+        joint_velocities = torch.zeros(self.n_joints, device=self.device)
         for i in range(self.n_joints):
             joint_state = p.getJointState(self.robot_id, i)
             joint_positions[i] = joint_state[0]
@@ -58,18 +56,18 @@ class AnymalEnv:
         observation = torch.cat((
             joint_positions,
             joint_velocities,
-            torch.tensor(base_position),
-            torch.tensor(base_orientation),
-            torch.tensor(base_velocity),
-            torch.tensor(base_angular_velocity)
+            torch.tensor(base_position, device=self.device),
+            torch.tensor(base_orientation, device=self.device),
+            torch.tensor(base_velocity, device=self.device),
+            torch.tensor(base_angular_velocity, device=self.device)
         ))
 
         return observation
 
     def step(self, action):
         """ 
-        Apply the action to the robot and step the simulation. 
-        Action should contain both the target joint positions and the forces.
+        Apply the action to the robot and step the simulation.
+        Action should be a tensor containing both the target joint positions and the forces.
         """
         assert len(action) == 2 * self.n_joints, "Action must include target positions and forces."
 
@@ -83,8 +81,8 @@ class AnymalEnv:
                 bodyUniqueId=self.robot_id,
                 jointIndex=i,
                 controlMode=p.POSITION_CONTROL,
-                targetPosition=target_positions[i],
-                force=forces[i]  # Use the force specified in the action
+                targetPosition=target_positions[i].item(),  # Extract scalar from tensor
+                force=forces[i].item()  # Extract scalar from tensor
             )
         
         # Step the simulation
@@ -102,24 +100,55 @@ class AnymalEnv:
         return observation, reward, done, {}
 
     def calculate_reward(self, observation, action):
-        """ Calculate the reward based on the paper's formulation """
+        """ Calculate the reward based on the paper's formulation, using PyTorch tensors """
+
         # Extract relevant observation components
-        joint_velocities = observation[:self.n_joints]  # First n_joints are velocities
+        joint_positions = observation[:self.n_joints]  # First n_joints are joint positions
+        joint_velocities = observation[self.n_joints:self.n_joints*2]  # Joint velocities
         base_orientation = observation[-10:-6]  # Quaternion orientation (x, y, z, w)
         base_angular_velocity = observation[-6:-3]  # Angular velocity (omega_x, omega_y, omega_z)
-        
-        # Reward components
-        g_z = base_orientation[2]  # Use z-component of gravity (orientation)
-        shaking_penalty = torch.norm(base_angular_velocity[:2])  # Penalize for roll/pitch angular velocity
-        torque_penalty = torch.sum(torch.relu(torch.abs(joint_velocities) - 1))  # Penalize excessive joint velocity
-        
-        # Final reward (negative reward for stability, positive for instability)
-        reward = -1  # Penalize for being alive
-        reward += g_z  # Encourage instability in the orientation
-        reward += shaking_penalty  # Penalize stability in shaking
-        reward += torque_penalty  # Penalize safe torque behavior
-        
+
+        # Extract torque information (if available) or calculate from action if needed
+        joint_torques = self.calculate_joint_torques(joint_velocities)
+
+        # ---------------------- Paper-based Reward Components ----------------------
+
+        # 1. Orientation Penalty (based on g_z component of gravity)
+        g_z = base_orientation[2]  # z-component of orientation (gravity vector's effect)
+        orientation_penalty = g_z  # Encourage bad orientation by increasing reward as g_z decreases
+
+        # 2. Shaking Penalty (based on angular velocity in x and y axes)
+        shaking_penalty = torch.norm(base_angular_velocity[:2])  # Penalize for angular velocity in roll/pitch axes (instability)
+
+        # 3. Torque Penalty (penalize excessive joint torques)
+        # The soft torque limits are applied here, so if torques exceed the limit, apply penalty
+        torque_limits = torch.tensor([1.0] * self.n_joints, device=self.device)  # Define your torque limits
+        torque_penalty = torch.sum(torch.relu(torch.abs(joint_torques) - torque_limits))  # Penalize if torque exceeds limits
+
+        # 4. Lipschitz Regularization (for smooth adversarial actions)
+        # Implementing Lipschitz regularization to prevent sharp/oscillating actions
+        lipschitz_penalty = torch.sum(torch.abs(torch.diff(action, dim=0)))  # Penalize large differences between successive actions
+
+        # 5. Base Penalty (penalize the robot for being alive)
+        base_penalty = -1  # Constant penalty for the robot being alive to encourage destabilization
+
+        # ---------------------- Combining All Reward Components ----------------------
+        # Final reward calculation, combining all the components
+        reward = base_penalty
+        reward += orientation_penalty  # Add orientation penalty (encourages instability)
+        reward += shaking_penalty  # Add shaking penalty (instability)
+        reward += torque_penalty  # Add torque penalty (excessive torque)
+        reward += lipschitz_penalty  # Add Lipschitz regularization (smooth adversarial actions)
+
         return reward
+
+
+    def calculate_joint_torques(self, joint_velocities):
+        """Calculate joint torques based on joint velocities. This is simplified as your setup may vary."""
+        # In a real system, torques would be obtained via sensors or calculated based on system dynamics
+        # Here we assume joint torques are proportional to velocities for simplicity.
+        torques = joint_velocities * 0.1  # Simplified relation between velocity and torque
+        return torques
 
     def check_done(self, observation):
         """ Check termination conditions (e.g., if the robot falls over) """

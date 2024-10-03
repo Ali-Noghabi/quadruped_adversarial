@@ -23,7 +23,7 @@ def random_actions(n_joints, destabilize=False):
 def run_simulation(chart = False):
     """ Main script to run the Anymal environment with random actions """
     # Create the environment
-    env = AnymalEnv(gui=True)  # Set gui=True for visualization
+    env = AnymalEnv(gui=True , device='cuda')  # Set gui=True for visualization
     
     # Reset the environment
     obs = env.reset()
@@ -58,7 +58,7 @@ def run_simulation(chart = False):
         
         if(chart):
             # Update the plot
-            rewards.append(reward)  # Append reward to list 
+            rewards.append(reward.cpu().item())  # Append reward to list 
             plt.clf()  # Clear the current figure
             plt.plot(rewards)  # Plot the rewards
             plt.title("Reward over Time")  # Set title
