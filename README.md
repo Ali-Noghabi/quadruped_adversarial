@@ -75,8 +75,8 @@ The RL agent's behavior is governed by a step-based reward function designed to 
 #### Mathematical Formulation
 
 At each time step \( t \), the reward \( R_t \) is:
-
-$$
+![alt text](doc/reward_function.png)
+<!-- $$
 \begin{aligned}
 R_t =\ & w_{\text{short}} \cdot \sum_{k=t}^{t + N_{\text{short}}} \left[ w_{\text{pos\_short}} \cdot \| \Delta \mathbf{p}_k \| + w_{\text{orient\_short}} \cdot \| \Delta \mathbf{\theta}_k \| \right] \\
 & + w_{\text{long}} \cdot \sum_{k=t}^{t + N_{\text{long}}} \left[ w_{\text{pos\_long}} \cdot \| \Delta \mathbf{p}_k \| + w_{\text{orient\_long}} \cdot \| \Delta \mathbf{\theta}_k \| \right] \\
@@ -84,7 +84,7 @@ R_t =\ & w_{\text{short}} \cdot \sum_{k=t}^{t + N_{\text{short}}} \left[ w_{\tex
 & - w_{\text{reg}} \cdot \| \mathbf{a}_t \| \\
 & + w_{\text{fail}} \cdot \mathbb{I}_{\text{fail}}
 \end{aligned}
-$$
+$$ -->
 
 #### Component Breakdown
 
