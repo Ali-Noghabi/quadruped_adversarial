@@ -61,7 +61,7 @@ The dataset includes trajectories captured under:
 
 ### Reinforcement Learning (RL) Agent
 
-An RL agent is utilized to introduce perturbations that challenge the robot’s trajectory. Inspired by existing research, the agent has been updated to consider both short-term and long-term deviations from the main route.
+An RL agent is utilized to introduce perturbations that challenge the robot’s trajectory. Inspired by ["Rethinking Robustness Assessment: Adversarial Attacks on Learning-based Quadrupedal Locomotion Controllers"](https://arxiv.org/abs/2405.12424) research, the agent has been updated to consider both short-term and long-term deviations from the main route.
 
 #### Key Features:
 
@@ -178,5 +178,5 @@ For an implementation instance of UKF-PINN over the legged robot dataset, check 
 
 - [legged_gym](https://github.com/leggedrobotics/legged_gym) 
 - [mujoco_mpc](https://github.com/google-deepmind/mujoco_mpc)
-
+- [Rethinking Robustness Assessment: Adversarial Attacks on Learning-based Quadrupedal Locomotion Controllers](https://arxiv.org/abs/2405.12424)
 ---
