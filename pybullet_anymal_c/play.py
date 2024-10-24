@@ -86,13 +86,13 @@ def run_simulation(policy_net, value_net=None, chart=False):
         
         if chart:
             # Update the plot
-            rewards.append(reward.cpu().item())  # Append reward to list
+            rewards.append((reward.cpu().item() + 1) * 700)  # Append reward to list
             if value_net:
                 values.append(state_value)  # Append value to list if value_net is available
             plt.clf()  # Clear the current figure
             plt.plot(rewards, label='Reward')
-            if value_net:
-                plt.plot(values, label='State Value')
+            # if value_net:
+                # plt.plot(values, label='State Value')
             plt.title("Reward and Value over Time")  # Set title
             plt.xlabel("Step")  # Set x-axis label
             plt.ylabel("Value")  # Set y-axis label

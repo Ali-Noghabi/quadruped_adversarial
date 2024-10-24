@@ -91,57 +91,54 @@ class AnymalEnv:
         # Get new observations
         observation = self.get_observation()
 
+        torques = torch.zeros(self.n_joints, device=self.device)
+        for i in range(self.n_joints):
+            joint_state = p.getJointState(self.robot_id, i)
+            torques[i] = joint_state[3]  # Joint torque is the fourth item in the tuple returned by getJointState
+
         # Calculate the reward
-        reward = self.calculate_reward(observation, target_positions)
+        reward , gz , shaking_reward , torque_penalty = self.calculate_reward(observation, torques)
 
         # Check for done conditions
         done = self.check_done(observation)
 
-        return observation, reward, done, {}
+        # return observation, reward, done, {} , gz , shaking_reward , torque_penalty
+        return observation, reward, done, {} 
 
-    def calculate_reward(self, observation, action):
-        """ Calculate the reward based on the paper's formulation, using PyTorch tensors """
+    def calculate_reward(self, observation, torques):
+        # Constants (you'll need to choose appropriate values)
+        corient = 1.0  # Adjust based on testing
+        cshake = 0.05   # Adjust based on testing
+        ctorque = 0.05  # Adjust based on testing
+        torque_limits = torch.tensor([20] * self.n_joints, device=self.device)  # Example limits, adjust as necessary
 
-        # Extract relevant observation components
-        joint_positions = observation[:self.n_joints]  # First n_joints are joint positions
-        joint_velocities = observation[self.n_joints:self.n_joints*2]  # Joint velocities
-        base_orientation = observation[-10:-6]  # Quaternion orientation (x, y, z, w)
-        base_angular_velocity = observation[-6:-3]  # Angular velocity (omega_x, omega_y, omega_z)
+        # Extract base orientation quaternion
+        quaternion = observation[-10:-6]
+        _, _, z = p.getEulerFromQuaternion(quaternion.tolist())  # Assuming this gives us roll, pitch, yaw
+        
+        # Calculate gz from the pitch
+        gz = -torch.cos(torch.tensor(z, device=self.device))
+        
+        # Extract angular velocities
+        base_angular_velocity = observation[-3:]
+        wx, wy = base_angular_velocity[0], base_angular_velocity[1]
+        
+        # Shaking Reward
+        shaking_reward = cshake * (wx**2 + wy**2)
 
-        # Extract torque information (if available) or calculate from action if needed
-        joint_torques = self.calculate_joint_torques(joint_velocities)
+        # Torque Penalty
+        # print(torques)
+        relative_torques = torch.abs(torques) / torque_limits
+        torque_penalty = ctorque * torch.sum(torch.relu(relative_torques - 1))
 
-        # ---------------------- Paper-based Reward Components ----------------------
+        # Combine all parts of the reward
+        reward = corient * gz + shaking_reward + torque_penalty
 
-        # 1. Orientation Penalty (based on g_z component of gravity)
-        g_z = base_orientation[2]  # z-component of orientation (gravity vector's effect)
-        orientation_penalty = g_z  # Encourage bad orientation by increasing reward as g_z decreases
-
-        # 2. Shaking Penalty (based on angular velocity in x and y axes)
-        shaking_penalty = torch.norm(base_angular_velocity[:2])  # Penalize for angular velocity in roll/pitch axes (instability)
-
-        # 3. Torque Penalty (penalize excessive joint torques)
-        # The soft torque limits are applied here, so if torques exceed the limit, apply penalty
-        torque_limits = torch.tensor([1.0] * self.n_joints, device=self.device)  # Define your torque limits
-        torque_penalty = torch.sum(torch.relu(torch.abs(joint_torques) - torque_limits))  # Penalize if torque exceeds limits
-
-        # 4. Lipschitz Regularization (for smooth adversarial actions)
-        # Implementing Lipschitz regularization to prevent sharp/oscillating actions
-        lipschitz_penalty = torch.sum(torch.abs(torch.diff(action, dim=0)))  # Penalize large differences between successive actions
-
-        # 5. Base Penalty (penalize the robot for being alive)
-        base_penalty = -1  # Constant penalty for the robot being alive to encourage destabilization
-
-        # ---------------------- Combining All Reward Components ----------------------
-        # Final reward calculation, combining all the components
-        reward = base_penalty
-        reward += orientation_penalty  # Add orientation penalty (encourages instability)
-        reward += shaking_penalty  # Add shaking penalty (instability)
-        reward += torque_penalty  # Add torque penalty (excessive torque)
-        reward += lipschitz_penalty  # Add Lipschitz regularization (smooth adversarial actions)
-
-        return reward
-
+            # Debugging print statement
+        print(f"gz: {gz.item()}, "
+          f"Shaking Reward: {shaking_reward.item()}, Torque Penalty: {torque_penalty}, "
+          f"Total Reward: {reward.item()}")
+        return reward ,gz, shaking_reward , torque_penalty
 
     def calculate_joint_torques(self, joint_velocities):
         """Calculate joint torques based on joint velocities. This is simplified as your setup may vary."""

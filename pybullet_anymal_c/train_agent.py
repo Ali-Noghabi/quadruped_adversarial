@@ -1,12 +1,12 @@
+import torch
 from adversarial_agent import PPOAgent
 from environment import AnymalEnv
-import torch
 
 def process_trajectories(agent, trajectories, gamma=0.99):
     """ Process the collected trajectories to compute returns and advantages """
     states, actions, rewards, next_states, dones = zip(*trajectories)
     
-    # Convert to torch tensors directly (instead of using np.array)
+    # Convert to torch tensors directly
     states = torch.stack(states)
     actions = torch.stack(actions)
     rewards = torch.tensor(rewards, dtype=torch.float32)
@@ -25,11 +25,6 @@ def process_trajectories(agent, trajectories, gamma=0.99):
     values = agent.value_net(states).detach().squeeze()  # Squeeze to ensure it's 1D
     advantages = returns - values  # Now this will be 1D
 
-    # Print debugging information for tensor shapes
-    # print(f"Values shape: {values.shape}")  # Should be [136]
-    # print(f"Returns shape: {returns.shape}")  # Should be [136]
-    # print(f"Advantages shape: {advantages.shape}")  # Should be [136]
-
     # Collect necessary data for PPO update
     return {
         'states': states,
@@ -40,7 +35,7 @@ def process_trajectories(agent, trajectories, gamma=0.99):
     }
 
 def train(agent, env, num_episodes=1000, rollout_length=2048):
-    """ Training loop for the agent """
+    """ Training loop for the agent with Lipschitz regularization """
     for episode in range(num_episodes):
         trajectories = []
         state = torch.FloatTensor(env.reset())  # Ensure state is a tensor
@@ -48,7 +43,7 @@ def train(agent, env, num_episodes=1000, rollout_length=2048):
         for t in range(rollout_length):
             action = agent.select_action(state)
             action = torch.FloatTensor(action)  # Ensure action is a tensor
-            print(f'action: {action}')
+            # print(f'action: {action}')
             next_state, reward, done, _ = env.step(action)  # Convert action to NumPy for the environment
             next_state = torch.FloatTensor(next_state)  # Ensure next_state is a tensor
             

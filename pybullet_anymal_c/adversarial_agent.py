@@ -32,10 +32,11 @@ class ValueNetwork(nn.Module):
 
 # Define the PPO Agent class
 class PPOAgent:
-    def __init__(self, obs_dim, action_dim, lr=3e-4, gamma=0.99, clip_epsilon=0.2, entropy_coef=0.01):
+    def __init__(self, obs_dim, action_dim, lr=3e-4, gamma=0.99, clip_epsilon=0.2, entropy_coef=0.01, lipschitz_lambda=0.01):
         self.gamma = gamma
         self.clip_epsilon = clip_epsilon
         self.entropy_coef = entropy_coef
+        self.lipschitz_lambda = lipschitz_lambda
         
         # Networks
         self.policy_net = PolicyNetwork(obs_dim, action_dim)
@@ -55,30 +56,15 @@ class PPOAgent:
         """ Compute the PPO loss with clipped objective """
         new_log_probs = self.compute_log_probs(states, actions)
         
-        # Debugging print statements to track tensor sizes
-        # print(f"States shape: {states.shape}")
-        # print(f"Actions shape: {actions.shape}")
-        # print(f"Advantages shape: {advantages.shape}")
-        # print(f"Returns shape: {returns.shape}")
-        # print(f"New log probs shape: {new_log_probs.shape}")
-        # print(f"Old log probs shape: {old_log_probs.shape}")
-        
         # Compute the ratio
         ratio = torch.exp(new_log_probs - old_log_probs)
         
-        # print(f"Ratio shape: {ratio.shape}")
-        
         # Broadcast the advantages to match the shape of ratio
         advantages = advantages.unsqueeze(1)  # Now advantages shape is [batch_size, 1]
-        
-        # print(f"Broadcasted Advantages shape: {advantages.shape}")
 
         # Surrogate loss
         surr1 = ratio * advantages
         surr2 = torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * advantages
-
-        # print(f"Surr1 shape: {surr1.shape}")
-        # print(f"Surr2 shape: {surr2.shape}")
         
         policy_loss = -torch.min(surr1, surr2).mean()
 
@@ -91,9 +77,9 @@ class PPOAgent:
         
         # Lipschitz regularization
         lipschitz_loss = self.lipschitz_regularization()
-        
+
         # Total loss
-        total_loss = policy_loss + value_loss + entropy_loss + lipschitz_loss
+        total_loss = policy_loss + value_loss + entropy_loss + self.lipschitz_lambda * lipschitz_loss
         return total_loss
 
     
@@ -106,7 +92,7 @@ class PPOAgent:
         returns = torch.FloatTensor(trajectories['returns'])
         advantages = torch.FloatTensor(trajectories['advantages'])
 
-        # Compute the loss
+        # Compute the loss, including Lipschitz regularization
         loss = self.compute_ppo_loss(old_log_probs.detach(), states.detach(), actions.detach(), advantages.detach(), returns.detach())
         
         # Update policy network
@@ -134,4 +120,3 @@ class PPOAgent:
         for param in self.policy_net.parameters():
             lipschitz_penalty += torch.norm(param, p=float('inf'))  # Apply infinity norm to penalize large changes
         return lipschitz_penalty
-
